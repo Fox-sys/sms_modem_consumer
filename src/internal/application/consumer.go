@@ -39,6 +39,7 @@ func (c *PollAndForward) Run() error {
 				slog.Error("forward failed", "err", err)
 			}
 		}
+		slog.Debug("poll cycle done", "messages", len(messages))
 		time.Sleep(c.Interval)
 	}
 }
