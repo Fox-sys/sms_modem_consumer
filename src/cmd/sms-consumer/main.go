@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"sender-modem/internal/application"
-	"sender-modem/internal/infrastructure/api"
-	"sender-modem/internal/infrastructure/huawei"
+	"sender-modem/src/internal/application"
+	"sender-modem/src/internal/infrastructure/api"
+	"sender-modem/src/internal/infrastructure/huawei"
 )
 
 func main() {

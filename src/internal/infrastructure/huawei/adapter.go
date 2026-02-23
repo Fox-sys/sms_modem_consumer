@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"sender-modem/internal/domain"
+	"sender-modem/src/internal/domain"
 )
 
 var ErrNotConnected = errors.New("adapter not connected: call Connect first")

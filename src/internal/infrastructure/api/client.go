@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"sender-modem/internal/domain"
+	"sender-modem/src/internal/domain"
 )
 
 const defaultHTTPTimeout = 30 * time.Second

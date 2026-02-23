@@ -31,18 +31,17 @@ API payload: `POST {SMS_API_BASE_URL}/api/sms` with a JSON array of objects `{ "
 **Local (Go installed):**
 
 ```bash
-cd src
-go run ./cmd/sms-consumer
+go run ./src/cmd/sms-consumer
 ```
 
 Set env vars before running (e.g. `export SMS_API_BASE_URL=...`) or use a `.env` file with a tool that injects them.
 
 **Docker:**
 
-Build (context is the `src` directory):
+Build (context is repo root; dependencies are installed before copying code so that layer is cached):
 
 ```bash
-docker build -f deployment/Dockerfile -t sms_modem_consumer src
+docker build -f deployment/Dockerfile -t sms_modem_consumer .
 ```
 
 Run (modem on host network, e.g. `192.168.8.1`):

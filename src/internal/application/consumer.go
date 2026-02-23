@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"sender-modem/internal/domain"
+	"sender-modem/src/internal/domain"
 )
 
 type PollAndForward struct {
