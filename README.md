@@ -22,6 +22,7 @@ Environment variables only (prefix `SMS_`):
 | `SMS_MODEM_PASSWORD` | `admin` | HiLink password |
 | `SMS_API_BASE_URL` | — | Remote API base URL (required) |
 | `SMS_API_KEY` | — | Bearer token for API (optional) |
+| `SMS_LOG_LEVEL` | `info` | Log level: `info` or `debug`. With `debug`, each forwarded message is also printed to stdout (phone, content, date). |
 
 API payload: `POST {SMS_API_BASE_URL}/api/sms` with a JSON array of objects `{ "index", "phone", "content", "date", "smstat", "sms_type" }`.
 
@@ -34,21 +35,23 @@ cd src
 go run ./cmd/sms-consumer
 ```
 
+Set env vars before running (e.g. `export SMS_API_BASE_URL=...`) or use a `.env` file with a tool that injects them.
+
 **Docker:**
 
 Build (context is the `src` directory):
 
 ```bash
-docker build -f deployment/Dockerfile -t sender-modem src
+docker build -f deployment/Dockerfile -t sms_modem_consumer src
 ```
 
-Run:
+Run (modem on host network, e.g. `192.168.8.1`):
 
 ```bash
-docker run --rm \
+docker run --rm --network host \
   -e SMS_API_BASE_URL=https://your-api.example.com \
   -e SMS_API_KEY=your-token \
-  sender-modem
+  sms_modem_consumer
 ```
 
-Use `--network host` or port mapping when the modem is on the local network.
+Optional: `-e SMS_LOG_LEVEL=debug` to print each forwarded message (phone, content, date) to stdout.

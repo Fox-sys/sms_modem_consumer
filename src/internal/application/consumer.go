@@ -32,6 +32,9 @@ func (c *PollAndForward) Run() error {
 		}
 		if len(messages) > 0 {
 			slog.Info("forwarding messages", "count", len(messages))
+			for _, m := range messages {
+				slog.Debug("message", "phone", m.Phone, "content", m.Content, "date", m.Date)
+			}
 			if err := c.Forwarder.Forward(messages); err != nil {
 				slog.Error("forward failed", "err", err)
 			}

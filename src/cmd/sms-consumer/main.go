@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"sender-modem/internal/application"
@@ -11,7 +12,7 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	cfg, err := application.LoadConfig()
 	if err != nil {
@@ -19,6 +20,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	level := slog.LevelInfo
+	if strings.EqualFold(cfg.LogLevel, "debug") {
+		level = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
 	reader := huawei.NewAdapter(cfg.ModemBaseURL, cfg.ModemUsername, cfg.ModemPassword)
 	forwarder := api.NewClient(cfg.APIBaseURL, cfg.APIKey)
 

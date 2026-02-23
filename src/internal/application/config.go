@@ -13,6 +13,7 @@ type Config struct {
 	ModemPassword       string `env:"SMS_MODEM_PASSWORD" env-default:"admin"`
 	APIBaseURL          string `env:"SMS_API_BASE_URL" env-default:""`
 	APIKey              string `env:"SMS_API_KEY" env-default:""`
+	LogLevel            string `env:"SMS_LOG_LEVEL" env-default:"info"`
 }
 
 func LoadConfig() (Config, error) {
