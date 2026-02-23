@@ -34,15 +34,16 @@ func (c *Client) Forward(messages []domain.SmsMessage) error {
 	if len(messages) == 0 {
 		return nil
 	}
-	payload, err := json.Marshal(messages)
+	payload, err := json.Marshal(map[string]interface{}{"messages": messages})
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/api/sms", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/api/v1/sms/send", bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}

@@ -24,7 +24,7 @@ Environment variables only (prefix `SMS_`):
 | `SMS_API_KEY` | — | Bearer token for API (optional) |
 | `SMS_LOG_LEVEL` | `info` | Log level: `info` or `debug`. With `debug`, each forwarded message is also printed to stdout (phone, content, date). |
 
-API payload: `POST {SMS_API_BASE_URL}/api/sms` with a JSON array of objects `{ "index", "phone", "content", "date", "smstat", "sms_type" }`.
+API: `POST {SMS_API_BASE_URL}/api/v1/sms/send` with body `{"messages": [{ "index", "phone", "content", "date", "smstat", "sms_type" }, ...]}`. Header `Authorization: Bearer {SMS_API_KEY}` when set.
 
 ## Run
 
