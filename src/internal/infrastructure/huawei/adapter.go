@@ -8,6 +8,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"strings"
 	"time"
 
@@ -29,12 +30,14 @@ type Adapter struct {
 
 func NewAdapter(baseURL, username, password string) *Adapter {
 	baseURL = strings.TrimSuffix(baseURL, "/")
+	jar, _ := cookiejar.New(nil)
 	return &Adapter{
 		baseURL:  baseURL,
 		username: username,
 		password: password,
 		client: &http.Client{
 			Timeout: defaultHTTPTimeout,
+			Jar:     jar,
 		},
 	}
 }
@@ -44,12 +47,16 @@ func (a *Adapter) Connect() error {
 	if err != nil {
 		return err
 	}
-	loginTok, err := a.login(tok, sess)
+	loginTok, newSess, err := a.login(tok, sess)
 	if err != nil {
 		return err
 	}
 	a.token = loginTok
-	a.sessionID = sess
+	if newSess != "" {
+		a.sessionID = newSess
+	} else {
+		a.sessionID = sess
+	}
 	return nil
 }
 
@@ -93,6 +100,9 @@ func (a *Adapter) GetSMS(opts domain.GetSMSOpts) ([]domain.SmsMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	if nextTok := resp.Header.Get("__RequestVerificationToken"); nextTok != "" {
+		a.token = nextTok
+	}
 	xmlStr := string(data)
 	if err := a.checkError(xmlStr); err != nil {
 		return nil, err
@@ -113,7 +123,11 @@ func (a *Adapter) GetSMS(opts domain.GetSMSOpts) ([]domain.SmsMessage, error) {
 
 func (a *Adapter) setAuth(req *http.Request) {
 	req.Header.Set("__RequestVerificationToken", a.token)
-	req.Header.Set("Cookie", a.sessionID)
+	cookieVal := a.sessionID
+	if cookieVal != "" && !strings.HasPrefix(cookieVal, "SessionID=") {
+		cookieVal = "SessionID=" + cookieVal
+	}
+	req.Header.Set("Cookie", cookieVal)
 }
 
 func (a *Adapter) getSessionToken() (token, session string, err error) {
@@ -126,6 +140,7 @@ func (a *Adapter) getSessionToken() (token, session string, err error) {
 	if err != nil {
 		return "", "", err
 	}
+	data = bytes.TrimSpace(data)
 	var info struct {
 		TokInfo string `xml:"TokInfo"`
 		SesInfo string `xml:"SesInfo"`
@@ -133,13 +148,15 @@ func (a *Adapter) getSessionToken() (token, session string, err error) {
 	if err := xml.Unmarshal(data, &info); err != nil {
 		return "", "", err
 	}
+	info.TokInfo = strings.TrimSpace(info.TokInfo)
+	info.SesInfo = strings.TrimSpace(info.SesInfo)
 	if info.TokInfo == "" || info.SesInfo == "" {
 		return "", "", errors.New("failed to obtain session/token")
 	}
 	return info.TokInfo, info.SesInfo, nil
 }
 
-func (a *Adapter) login(token, sessionID string) (string, error) {
+func (a *Adapter) login(token, sessionID string) (loginToken, newSessionID string, err error) {
 	body := fmt.Sprintf(`<request>
 <Username>%s</Username>
 <Password>%s</Password>
@@ -148,30 +165,43 @@ func (a *Adapter) login(token, sessionID string) (string, error) {
 
 	req, err := http.NewRequest(http.MethodPost, a.baseURL+"/api/user/login", strings.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("Content-Type", "application/xml")
 	req.Header.Set("__RequestVerificationToken", token)
-	req.Header.Set("Cookie", sessionID)
+	cookieVal := sessionID
+	if cookieVal != "" && !strings.HasPrefix(cookieVal, "SessionID=") {
+		cookieVal = "SessionID=" + cookieVal
+	}
+	req.Header.Set("Cookie", cookieVal)
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !bytes.Contains(data, []byte("<response>OK</response>")) {
-		return "", errors.New("login failed")
+		return "", "", errors.New("login failed")
 	}
-	loginToken := resp.Header.Get("__RequestVerificationToken")
+	loginToken = resp.Header.Get("__RequestVerificationToken")
+	if loginToken != "" && strings.Contains(loginToken, "#") {
+		loginToken = strings.Split(loginToken, "#")[0]
+	}
 	if loginToken == "" {
-		return "", errors.New("no verification token returned after login")
+		return "", "", errors.New("no verification token returned after login")
 	}
-	return loginToken, nil
+	for _, c := range resp.Cookies() {
+		if c.Name == "SessionID" {
+			newSessionID = c.Value
+			break
+		}
+	}
+	return loginToken, newSessionID, nil
 }
 
 func (a *Adapter) deleteSMS(indices []int) error {
@@ -198,6 +228,9 @@ func (a *Adapter) deleteSMS(indices []int) error {
 	if err != nil {
 		return err
 	}
+	if nextTok := resp.Header.Get("__RequestVerificationToken"); nextTok != "" {
+		a.token = nextTok
+	}
 	if err := a.checkError(string(data)); err != nil {
 		return err
 	}
@@ -212,24 +245,27 @@ func (a *Adapter) checkError(xmlStr string) error {
 		return nil
 	}
 	var errResp struct {
-		Code string `xml:"code"`
+		XMLName xml.Name `xml:"error"`
+		Code    string   `xml:"code"`
 	}
 	if err := xml.Unmarshal([]byte(xmlStr), &errResp); err != nil {
 		return fmt.Errorf("modem API error")
 	}
-	return fmt.Errorf("modem API error: %s", errResp.Code)
+	return fmt.Errorf("modem API error: %s", strings.TrimSpace(errResp.Code))
 }
 
 func (a *Adapter) parseSMS(xmlStr string) []domain.SmsMessage {
+	type msgStruct struct {
+		Index   int    `xml:"Index"`
+		Phone   string `xml:"Phone"`
+		Content string `xml:"Content"`
+		Date    string `xml:"Date"`
+		Smstat  int    `xml:"Smstat"`
+		SmsType int    `xml:"SmsType"`
+	}
 	var root struct {
-		Messages []struct {
-			Index   int    `xml:"Index"`
-			Phone   string `xml:"Phone"`
-			Content string `xml:"Content"`
-			Date    string `xml:"Date"`
-			Smstat  int    `xml:"Smstat"`
-			SmsType int    `xml:"SmsType"`
-		} `xml:"Messages>Message"`
+		XMLName  xml.Name   `xml:"response"`
+		Messages []msgStruct `xml:"Messages>Message"`
 	}
 	if err := xml.Unmarshal([]byte(xmlStr), &root); err != nil {
 		return nil
@@ -238,9 +274,9 @@ func (a *Adapter) parseSMS(xmlStr string) []domain.SmsMessage {
 	for _, m := range root.Messages {
 		out = append(out, domain.SmsMessage{
 			Index:   m.Index,
-			Phone:   m.Phone,
+			Phone:   strings.TrimSpace(m.Phone),
 			Content: html.UnescapeString(m.Content),
-			Date:    m.Date,
+			Date:    strings.TrimSpace(m.Date),
 			Smstat:  m.Smstat,
 			SmsType: m.SmsType,
 		})
